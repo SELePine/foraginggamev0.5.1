@@ -9,10 +9,8 @@
     canvas { display: block; margin: auto; }
     #overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
       background-color: rgba(0,0,0,0.75);
       color: white;
       font-family: sans-serif;
@@ -39,118 +37,353 @@
     <button id="startButton">Start Tutorial</button>
   </div>
 
-  <script>
-    const config = {
-      type: Phaser.AUTO,
-      width: 800,
-      height: 600,
-      backgroundColor: '#7ab67a',
-      physics: {
-        default: 'arcade',
-        arcade: {
-          debug: false
-        }
-      },
-      scene: [TutorialScene, MainGameScene, EndScene]
-    };
+<script>
+  const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    backgroundColor: '#7ab67a',
+    physics: {
+      default: 'arcade',
+      arcade: {
+        debug: false
+      }
+    },
+    scene: [TutorialScene, MainGameScene, EndScene]
+  };
 
-    const gameData = {
-      condition: null,
-      playerScore: 0,
-      botScore: 0,
-      wrongBerries: 0,
-      playerMoves: 0
-    };
+  // Shared game data across scenes
+  const gameData = {
+    condition: null,      // 'activeHarm' or 'passiveHarm' or 'control'
+    playerScore: 0,
+    botScore: 0,
+    playerWrongBerries: 0,
+    botWrongBerries: 0,
+    playerMoves: 0,
+    totalTime: 0
+  };
 
-    document.getElementById('startButton').addEventListener('click', () => {
-      document.getElementById('overlay').style.display = 'none';
-      new Phaser.Game(config);
+  // Randomly assign condition at game start
+  function assignCondition() {
+    const conditions = ['activeHarm', 'passiveHarm', 'control'];
+    return conditions[Math.floor(Math.random() * conditions.length)];
+  }
+
+  document.getElementById('startButton').addEventListener('click', () => {
+    document.getElementById('overlay').style.display = 'none';
+    gameData.condition = assignCondition();
+    new Phaser.Game(config);
+  });
+
+  // --- Tutorial Scene ---
+  function TutorialScene() {
+    Phaser.Scene.call(this, { key: 'TutorialScene' });
+  }
+  TutorialScene.prototype = Object.create(Phaser.Scene.prototype);
+  TutorialScene.prototype.constructor = TutorialScene;
+
+  TutorialScene.prototype.create = function() {
+    this.add.text(20, 20, 'Tutorial: Use WASD to move', { font: '20px Arial', fill: '#fff' });
+
+    this.player = this.add.rectangle(400, 300, 20, 20, 0xff0000);
+    this.physics.add.existing(this.player);
+    this.player.body.setCollideWorldBounds(true);
+
+    this.bush1 = this.add.circle(500, 300, 20, 0x2e8b57);
+    this.berry = this.add.circle(500, 300, 10, 0x800080); // Purple berry
+    this.physics.add.existing(this.berry);
+    this.berry.setData('type', 'purple');
+
+    this.phase = 0;
+
+    this.cursors = this.input.keyboard.addKeys({
+      W: Phaser.Input.Keyboard.KeyCodes.W,
+      A: Phaser.Input.Keyboard.KeyCodes.A,
+      S: Phaser.Input.Keyboard.KeyCodes.S,
+      D: Phaser.Input.Keyboard.KeyCodes.D
     });
 
-    function TutorialScene() {
-      Phaser.Scene.call(this, { key: 'TutorialScene' });
+    this.instructionsText = this.add.text(20, 60, '', { font: '20px Arial', fill: '#fff' });
+  };
+
+  TutorialScene.prototype.update = function() {
+    const speed = 200;
+    this.player.body.setVelocity(0);
+
+    if (this.cursors.W.isDown) this.player.body.setVelocityY(-speed);
+    if (this.cursors.S.isDown) this.player.body.setVelocityY(speed);
+    if (this.cursors.A.isDown) this.player.body.setVelocityX(-speed);
+    if (this.cursors.D.isDown) this.player.body.setVelocityX(speed);
+
+    if (this.phase === 0 && (this.cursors.W.isDown || this.cursors.A.isDown || this.cursors.S.isDown || this.cursors.D.isDown)) {
+      this.phase = 1;
+      this.instructionsText.setText('Good! Now move to the bush and collect the purple berry.');
     }
-    TutorialScene.prototype = Object.create(Phaser.Scene.prototype);
-    TutorialScene.prototype.constructor = TutorialScene;
 
-    TutorialScene.prototype.create = function() {
-      const text = this.add.text(20, 20, 'Tutorial: Use WASD to move', { font: '20px Arial', fill: '#ffffff' });
-      this.player = this.add.rectangle(400, 300, 20, 20, 0xff0000);
-      this.physics.add.existing(this.player);
-      this.player.body.setCollideWorldBounds(true);
+    if (this.phase === 1 && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.berry.x, this.berry.y) < 30) {
+      this.berry.destroy();
+      this.bush2 = this.add.circle(600, 300, 20, 0x2e8b57);
+      this.orangeBerry = this.add.circle(600, 300, 10, 0xffa500); // Orange berry
+      this.physics.add.existing(this.orangeBerry);
+      this.orangeBerry.setData('type', 'orange');
+      this.phase = 2;
+      this.instructionsText.setText('Nice! Purple berries earn 1 point.\nNow collect an orange berry (they subtract points).');
+    }
 
-      this.bush1 = this.add.circle(500, 300, 20, 0x2e8b57);
-      this.berry = this.add.circle(500, 300, 10, 0x800080);
-      this.physics.add.existing(this.berry);
-      this.berry.setData('type', 'purple');
-      this.berryCollected = false;
-      this.phase = 0;
+    if (this.phase === 2 && this.orangeBerry && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.orangeBerry.x, this.orangeBerry.y) < 30) {
+      this.orangeBerry.destroy();
+      this.phase = 3;
+      this.instructionsText.setText(
+        'Orange berries subtract 1 point.\n' +
+        'Final score = Your + Partner\'s points − Wrong berries collected.\n' +
+        'Click "Go!" to start the real game.'
+      );
 
-      this.cursors = this.input.keyboard.addKeys({
-        W: Phaser.Input.Keyboard.KeyCodes.W,
-        A: Phaser.Input.Keyboard.KeyCodes.A,
-        S: Phaser.Input.Keyboard.KeyCodes.S,
-        D: Phaser.Input.Keyboard.KeyCodes.D
-      });
-    };
-
-    TutorialScene.prototype.update = function() {
-      const speed = 200;
-      this.player.body.setVelocity(0);
-      if (this.cursors.W.isDown) this.player.body.setVelocityY(-speed);
-      if (this.cursors.S.isDown) this.player.body.setVelocityY(speed);
-      if (this.cursors.A.isDown) this.player.body.setVelocityX(-speed);
-      if (this.cursors.D.isDown) this.player.body.setVelocityX(speed);
-
-      if (this.phase === 0 && (this.cursors.W.isDown || this.cursors.A.isDown || this.cursors.S.isDown || this.cursors.D.isDown)) {
-        this.phase = 1;
-        this.add.text(20, 60, 'Good! Now move to the bush and collect the purple berry.', { font: '20px Arial', fill: '#ffffff' });
-      }
-
-      if (this.phase === 1 && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.berry.x, this.berry.y) < 30) {
-        this.berry.destroy();
-        this.bush2 = this.add.circle(600, 300, 20, 0x2e8b57);
-        this.orangeBerry = this.add.circle(600, 300, 10, 0xffa500);
-        this.physics.add.existing(this.orangeBerry);
-        this.orangeBerry.setData('type', 'orange');
-        this.phase = 2;
-        this.add.text(20, 100, 'Nice! Purple berries earn 1 point.', { font: '20px Arial', fill: '#ffffff' });
-        this.add.text(20, 140, 'Now collect an orange berry (they subtract points).', { font: '20px Arial', fill: '#ffffff' });
-      }
-
-      if (this.phase === 2 && this.orangeBerry && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.orangeBerry.x, this.orangeBerry.y) < 30) {
-        this.orangeBerry.destroy();
-        this.phase = 3;
-        this.add.text(20, 180, 'Orange berries subtract 1 point.', { font: '20px Arial', fill: '#ffffff' });
-        this.add.text(20, 220, 'Final score = Your + Partner\'s points − Wrong berries collected.', { font: '20px Arial', fill: '#ffffff' });
-        this.add.text(20, 260, 'Click "Go!" to start the real game.', { font: '20px Arial', fill: '#ffffff' });
-
-        const button = this.add.text(20, 300, 'Go!', { font: '26px Arial', fill: '#00f', backgroundColor: '#fff', padding: 10 })
+      if (!this.goButton) {
+        this.goButton = this.add.text(20, 300, 'Go!', { font: '26px Arial', fill: '#00f', backgroundColor: '#fff', padding: 10 })
           .setInteractive()
           .on('pointerdown', () => this.scene.start('MainGameScene'));
       }
-    };
-
-    function MainGameScene() {
-      Phaser.Scene.call(this, { key: 'MainGameScene' });
     }
-    MainGameScene.prototype = Object.create(Phaser.Scene.prototype);
-    MainGameScene.prototype.constructor = MainGameScene;
+  };
 
-    MainGameScene.prototype.create = function() {
-      this.add.text(20, 20, 'Main Game Scene Started!', { font: '20px Arial', fill: '#ffffff' });
-      // Add real game content here
-    };
+  // --- Main Game Scene ---
+  function MainGameScene() {
+    Phaser.Scene.call(this, { key: 'MainGameScene' });
+  }
+  MainGameScene.prototype = Object.create(Phaser.Scene.prototype);
+  MainGameScene.prototype.constructor = MainGameScene;
 
-    function EndScene() {
-      Phaser.Scene.call(this, { key: 'EndScene' });
+  MainGameScene.prototype.create = function() {
+    this.add.text(20, 20, 'Collect berries! Game ends in 30 seconds.', { font: '20px Arial', fill: '#fff' });
+
+    this.gameTimer = 30; // seconds
+    this.timeLeft = this.gameTimer;
+
+    // Display timer text
+    this.timerText = this.add.text(650, 20, `Time: ${this.timeLeft}`, { font: '20px Arial', fill: '#fff' });
+
+    // Player setup
+    this.player = this.add.rectangle(100, 300, 20, 20, 0xff0000);
+    this.physics.add.existing(this.player);
+    this.player.body.setCollideWorldBounds(true);
+
+    // Bot setup (blue square)
+    this.bot = this.add.rectangle(700, 300, 20, 20, 0x0000ff);
+    this.physics.add.existing(this.bot);
+    this.bot.body.setCollideWorldBounds(true);
+
+    // Movement keys
+    this.cursors = this.input.keyboard.addKeys({
+      W: Phaser.Input.Keyboard.KeyCodes.W,
+      A: Phaser.Input.Keyboard.KeyCodes.A,
+      S: Phaser.Input.Keyboard.KeyCodes.S,
+      D: Phaser.Input.Keyboard.KeyCodes.D
+    });
+
+    // Generate bushes with berries
+    this.bushes = this.physics.add.staticGroup();
+    this.berries = this.physics.add.group();
+
+    // Create 7 bushes spaced horizontally with berries on them
+    for (let i = 0; i < 7; i++) {
+      const x = 100 + i * 100;
+      const y = 300;
+
+      const bush = this.add.circle(x, y, 25, 0x2e8b57);
+      this.bushes.add(bush);
+
+      // Randomly assign berry type to bush (purple or orange)
+      // To make right berries easier to collect, purple berries appear on bushes with a slightly bigger hit area
+      let berryType;
+      if (Math.random() < 0.6) {
+        berryType = 'purple';
+      } else {
+        berryType = 'orange';
+      }
+
+      let berryColor = berryType === 'purple' ? 0x800080 : 0xffa500;
+      let berry = this.add.circle(x, y, 12, berryColor);
+      this.physics.add.existing(berry);
+      berry.setData('type', berryType);
+      berry.setData('collected', false);
+      this.berries.add(berry);
     }
-    EndScene.prototype = Object.create(Phaser.Scene.prototype);
-    EndScene.prototype.constructor = EndScene;
 
-    EndScene.prototype.create = function() {
-      this.add.text(20, 20, 'End Scene (Coming soon...)', { font: '20px Arial', fill: '#ffffff' });
+    // Scores
+    gameData.playerScore = 0;
+    gameData.botScore = 0;
+    gameData.playerWrongBerries = 0;
+    gameData.botWrongBerries = 0;
+    gameData.playerMoves = 0;
+
+    // Display scores
+    this.playerScoreText = this.add.text(20, 550, 'Your score: 0', { font: '20px Arial', fill: '#fff' });
+    this.botScoreText = this.add.text(600, 550, 'Partner score: 0', { font: '20px Arial', fill: '#fff' });
+
+    // Colliders for player and berries
+    this.physics.add.overlap(this.player, this.berries, this.collectBerryPlayer, null, this);
+    this.physics.add.overlap(this.bot, this.berries, this.collectBerryBot, null, this);
+
+    // Bot movement target variables
+    this.botTargetBushIndex = 0;
+    this.botMoving = false;
+
+    // Set bot behavior parameters based on condition
+    // Bot will move slowly and collect mostly wrong berries in active harm,
+    // mostly idle and collect few berries in passive harm,
+    // similar to player in control.
+    this.botBehavior = {
+      activeHarm: {
+        collectWrongChance: 0.8,
+        moveSpeed: 60,
+        idleChance: 0.1
+      },
+      passiveHarm: {
+        collectWrongChance: 0.2,
+        moveSpeed: 40,
+        idleChance: 0.6
+      },
+      control: {
+        collectWrongChance: 0.4,
+        moveSpeed: 100,
+        idleChance: 0.1
+      }
     };
-  </script>
+
+    this.botParams = this.botBehavior[gameData.condition] || this.botBehavior.control;
+
+    // Timer event to end game
+    this.time.addEvent({
+      delay: this.gameTimer * 1000,
+      callback: () => {
+        this.scene.start('EndScene');
+      }
+    });
+
+    this.startTime = this.time.now;
+  };
+
+  MainGameScene.prototype.update = function(time, delta) {
+    // Update timer display
+    let elapsed = (time - this.startTime) / 1000;
+    this.timeLeft = Math.max(0, this.gameTimer - elapsed);
+    this.timerText.setText(`Time: ${this.timeLeft.toFixed(1)}`);
+
+    // Player movement
+    const speed = 200;
+    this.player.body.setVelocity(0);
+    if (this.cursors.W.isDown) this.player.body.setVelocityY(-speed);
+    if (this.cursors.S.isDown) this.player.body.setVelocityY(speed);
+    if (this.cursors.A.isDown) this.player.body.setVelocityX(-speed);
+    if (this.cursors.D.isDown) this.player.body.setVelocityX(speed);
+
+    if(this.player.body.velocity.length() > 0) {
+      gameData.playerMoves++;
+    }
+
+    // Bot AI: simple logic to move to bushes sequentially and collect berries
+    if (!this.botMoving && this.botTargetBushIndex < this.bushes.getLength()) {
+      const targetBush = this.bushes.getChildren()[this.botTargetBushIndex];
+      if (!targetBush) return;
+      const targetX = targetBush.x;
+      const targetY = targetBush.y;
+
+      // Move bot towards target bush
+      this.botMoving = true;
+      this.physics.moveTo(this.bot, targetX, targetY, this.botParams.moveSpeed);
+    }
+
+    if (this.botMoving) {
+      const targetBush = this.bushes.getChildren()[this.botTargetBushIndex];
+      if (!targetBush) return;
+      const distance = Phaser.Math.Distance.Between(this.bot.x, this.bot.y, targetBush.x, targetBush.y);
+
+      if (distance < 10) {
+        this.bot.body.setVelocity(0);
+        // Decide if bot collects berry or idles based on idleChance
+        if (Math.random() > this.botParams.idleChance) {
+          // Bot collects berry on this bush if present and not collected
+          const berryOnBush = this.berries.getChildren().find(b => !b.getData('collected') && Phaser.Math.Distance.Between(b.x, b.y, targetBush.x, targetBush.y) < 15);
+          if (berryOnBush) {
+            // In active harm bot collects wrong berries mostly
+            // So forcibly pick wrong berries if possible
+            if (this.botParams.collectWrongChance > 0.5) {
+              if (berryOnBush.getData('type') === 'orange') {
+                this.collectBerryBot(this.bot, berryOnBush);
+              } else {
+                // If berry is right and bot tries to be harmful, skip and move on
+              }
+            } else {
+              this.collectBerryBot(this.bot, berryOnBush);
+            }
+          }
+        }
+        this.botTargetBushIndex++;
+        this.botMoving = false;
+      }
+    }
+  };
+
+  MainGameScene.prototype.collectBerryPlayer = function(player, berry) {
+    if (berry.getData('collected')) return;
+    berry.setData('collected', true);
+    berry.destroy();
+
+    if (berry.getData('type') === 'purple') {
+      gameData.playerScore++;
+    } else {
+      gameData.playerWrongBerries++;
+    }
+    this.playerScoreText.setText('Your score: ' + (gameData.playerScore - gameData.playerWrongBerries));
+  };
+
+  MainGameScene.prototype.collectBerryBot = function(bot, berry) {
+    if (berry.getData('collected')) return;
+    berry.setData('collected', true);
+    berry.destroy();
+
+    if (berry.getData('type') === 'purple') {
+      gameData.botScore++;
+    } else {
+      gameData.botWrongBerries++;
+    }
+    this.botScoreText.setText('Partner score: ' + (gameData.botScore - gameData.botWrongBerries));
+  };
+
+  // --- End Scene ---
+  function EndScene() {
+    Phaser.Scene.call(this, { key: 'EndScene' });
+  }
+  EndScene.prototype = Object.create(Phaser.Scene.prototype);
+  EndScene.prototype.constructor = EndScene;
+
+  EndScene.prototype.create = function() {
+    const finalScore = (gameData.playerScore + gameData.botScore) - (gameData.playerWrongBerries + gameData.botWrongBerries);
+    this.add.text(20, 20, 'Game Over!', { font: '30px Arial', fill: '#fff' });
+    this.add.text(20, 70, `Your final score: ${gameData.playerScore - gameData.playerWrongBerries}`, { font: '22px Arial', fill: '#fff' });
+    this.add.text(20, 110, `Partner's final score: ${gameData.botScore - gameData.botWrongBerries}`, { font: '22px Arial', fill: '#fff' });
+    this.add.text(20, 150, `Combined final score: ${finalScore}`, { font: '22px Arial', fill: '#fff' });
+    this.add.text(20, 200, 'Thanks for playing!', { font: '22px Arial', fill: '#fff' });
+
+    // After 5 seconds redirect to Qualtrics survey with data passed in URL
+    const qualtricsBaseUrl = 'https://yourqualtricslinkhere.com';  // REPLACE with your actual Qualtrics link
+
+    const params = new URLSearchParams({
+      condition: gameData.condition,
+      playerScore: gameData.playerScore,
+      botScore: gameData.botScore,
+      playerWrongBerries: gameData.playerWrongBerries,
+      botWrongBerries: gameData.botWrongBerries,
+      playerMoves: gameData.playerMoves,
+      totalScore: finalScore
+    });
+
+    this.time.delayedCall(5000, () => {
+      window.location.href = qualtricsBaseUrl + '?' + params.toString();
+    });
+  };
+</script>
 </body>
 </html>
+
