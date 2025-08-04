@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Foraging Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+  <style>
+    body { margin: 0; padding: 0; }
+    canvas { display: block; margin: auto; }
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0,0,0,0.75);
+      color: white;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    #overlay button {
+      margin-top: 20px;
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <h1>Welcome to the Foraging Game!</h1>
+    <p>You and your partner (the blue square) will collect berries from bushes.</p>
+    <p>You are the <span style="color: red; font-weight: bold">red square</span>. Use <strong>WASD</strong> keys to move.</p>
+    <p><strong>Purple berries</strong> earn you points. <strong>Orange berries</strong> lose you points.</p>
+    <p>Your final score = Your score + Partner's score − Wrong berries collected by both.</p>
+    <p>You’ll first go through a quick tutorial to practice!</p>
+    <button id="startButton">Start Tutorial</button>
+  </div>
+
+  <script>
+    const config = {
+      type: Phaser.AUTO,
+      width: 800,
+      height: 600,
+      backgroundColor: '#7ab67a',
+      physics: {
+        default: 'arcade',
+        arcade: {
+          debug: false
+        }
+      },
+      scene: [TutorialScene, MainGameScene, EndScene]
+    };
+
+    const gameData = {
+      condition: null,
+      playerScore: 0,
+      botScore: 0,
+      wrongBerries: 0,
+      playerMoves: 0
+    };
+
+    document.getElementById('startButton').addEventListener('click', () => {
+      document.getElementById('overlay').style.display = 'none';
+      new Phaser.Game(config);
+    });
+
+    function TutorialScene() {
+      Phaser.Scene.call(this, { key: 'TutorialScene' });
+    }
+    TutorialScene.prototype = Object.create(Phaser.Scene.prototype);
+    TutorialScene.prototype.constructor = TutorialScene;
+
+    TutorialScene.prototype.create = function() {
+      const text = this.add.text(20, 20, 'Tutorial: Use WASD to move', { font: '20px Arial', fill: '#ffffff' });
+      this.player = this.add.rectangle(400, 300, 20, 20, 0xff0000);
+      this.physics.add.existing(this.player);
+      this.player.body.setCollideWorldBounds(true);
+
+      this.bush1 = this.add.circle(500, 300, 20, 0x2e8b57);
+      this.berry = this.add.circle(500, 300, 10, 0x800080);
+      this.physics.add.existing(this.berry);
+      this.berry.setData('type', 'purple');
+      this.berryCollected = false;
+      this.phase = 0;
+
+      this.cursors = this.input.keyboard.addKeys({
+        W: Phaser.Input.Keyboard.KeyCodes.W,
+        A: Phaser.Input.Keyboard.KeyCodes.A,
+        S: Phaser.Input.Keyboard.KeyCodes.S,
+        D: Phaser.Input.Keyboard.KeyCodes.D
+      });
+    };
+
+    TutorialScene.prototype.update = function() {
+      const speed = 200;
+      this.player.body.setVelocity(0);
+      if (this.cursors.W.isDown) this.player.body.setVelocityY(-speed);
+      if (this.cursors.S.isDown) this.player.body.setVelocityY(speed);
+      if (this.cursors.A.isDown) this.player.body.setVelocityX(-speed);
+      if (this.cursors.D.isDown) this.player.body.setVelocityX(speed);
+
+      if (this.phase === 0 && (this.cursors.W.isDown || this.cursors.A.isDown || this.cursors.S.isDown || this.cursors.D.isDown)) {
+        this.phase = 1;
+        this.add.text(20, 60, 'Good! Now move to the bush and collect the purple berry.', { font: '20px Arial', fill: '#ffffff' });
+      }
+
+      if (this.phase === 1 && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.berry.x, this.berry.y) < 30) {
+        this.berry.destroy();
+        this.bush2 = this.add.circle(600, 300, 20, 0x2e8b57);
+        this.orangeBerry = this.add.circle(600, 300, 10, 0xffa500);
+        this.physics.add.existing(this.orangeBerry);
+        this.orangeBerry.setData('type', 'orange');
+        this.phase = 2;
+        this.add.text(20, 100, 'Nice! Purple berries earn 1 point.', { font: '20px Arial', fill: '#ffffff' });
+        this.add.text(20, 140, 'Now collect an orange berry (they subtract points).', { font: '20px Arial', fill: '#ffffff' });
+      }
+
+      if (this.phase === 2 && this.orangeBerry && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.orangeBerry.x, this.orangeBerry.y) < 30) {
+        this.orangeBerry.destroy();
+        this.phase = 3;
+        this.add.text(20, 180, 'Orange berries subtract 1 point.', { font: '20px Arial', fill: '#ffffff' });
+        this.add.text(20, 220, 'Final score = Your + Partner\'s points − Wrong berries collected.', { font: '20px Arial', fill: '#ffffff' });
+        this.add.text(20, 260, 'Click "Go!" to start the real game.', { font: '20px Arial', fill: '#ffffff' });
+
+        const button = this.add.text(20, 300, 'Go!', { font: '26px Arial', fill: '#00f', backgroundColor: '#fff', padding: 10 })
+          .setInteractive()
+          .on('pointerdown', () => this.scene.start('MainGameScene'));
+      }
+    };
+
+    function MainGameScene() {
+      Phaser.Scene.call(this, { key: 'MainGameScene' });
+    }
+    MainGameScene.prototype = Object.create(Phaser.Scene.prototype);
+    MainGameScene.prototype.constructor = MainGameScene;
+
+    MainGameScene.prototype.create = function() {
+      this.add.text(20, 20, 'Main Game Scene Started!', { font: '20px Arial', fill: '#ffffff' });
+      // Add real game content here
+    };
+
+    function EndScene() {
+      Phaser.Scene.call(this, { key: 'EndScene' });
+    }
+    EndScene.prototype = Object.create(Phaser.Scene.prototype);
+    EndScene.prototype.constructor = EndScene;
+
+    EndScene.prototype.create = function() {
+      this.add.text(20, 20, 'End Scene (Coming soon...)', { font: '20px Arial', fill: '#ffffff' });
+    };
+  </script>
+</body>
+</html>
